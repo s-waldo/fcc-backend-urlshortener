@@ -6,6 +6,7 @@ const bodyParser = require("body-parser");
 const dns = require("dns");
 const mongoose = require('mongoose');
 const AutoIncrement = require('mongoose-sequence')(mongoose);
+const urlparser = require('url')
 
 // Basic Configuration
 const port = process.env.PORT || 3000;
@@ -29,14 +30,8 @@ const Url = mongoose.model('Urls', urlSchema)
 // Your first API endpoint
 
 app.post("/api/shorturl", (req, res) => {
-  const isUrl = verifyUrl(req.body.url);
-  if (!isUrl) {
-    res.json({ error: "invalid url" });
-    return;
-  }
-  const cleanedUrl = urlCleanup(req.body.url);
-  dns.lookup(cleanedUrl, async (err, address) => {
-    if (err) {
+    dns.lookup(urlparser.parse(req.body.url).hostname, async (err, address) => {
+    if (!address || err) {
       res.json({ error: "invalid url" });
       return;
     }
@@ -47,22 +42,13 @@ app.post("/api/shorturl", (req, res) => {
 });
 
 app.get("/api/shorturl/:id", async (req, res) => {
-  const url = await Url.findOne({short_url: req.params.id})
+  if (isNaN(req.params.id)) {
+    res.json({error: "invalid url"})
+    return
+  }
+  const url = await Url.findOne({short_url: Number(req.params.id)})
   res.redirect(url.original_url)
 });
-
-const verifyUrl = (url) => {
-  const regex = /^(http|https):\/\/(?:www\.)?[a-zA-Z0-9]+\.[a-z]{2,6}$/;
-  return regex.test(url);
-};
-
-const urlCleanup = (url) => {
-  let temp = url.split(/[\/.]/);
-  if (temp.length >= 2) {
-    temp = temp[temp.length - 2] + "." + temp[temp.length - 1];
-  }
-  return temp;
-};
 
 app.listen(port, function () {
   console.log(`Listening on port ${port}`);
